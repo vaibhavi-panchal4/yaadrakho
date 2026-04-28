@@ -16,6 +16,7 @@ return new class extends Migration
 
             $table->foreignId('event_id')->constrained()->onDelete('cascade');
             $table->foreignId('person_id')->constrained()->onDelete('cascade');
+            $table->foreignId('sub_event_id')->nullable()->constrained()->nullOnDelete();
 
             $table->enum('gift_type', ['cash', 'item']);
 

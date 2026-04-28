@@ -116,6 +116,7 @@ class SuggestionController extends Controller
             ]);
         }
 
+        
         $date = Carbon::parse($entry->created_at);
 
         $days = (int)$date->diffInDays(now());
@@ -140,13 +141,33 @@ class SuggestionController extends Controller
 
             $yearsFactor = $months / 12;
 
-            $increaseRate = min(0.12 + ($yearsFactor * 0.05), 0.20);
+            $days = (int)$date->diffInDays(now());
+            $months = (int)$date->diffInMonths(now());
+            $years = $months / 12;
 
-            $suggested = round($lastAmount * (1 + $increaseRate), -2);
+            // 🎯 Smart increase rules
+            if ($days < 30) {
+                $increaseRate = 0; // no change for recent
+            } elseif ($months < 6) {
+                $increaseRate = 0.05; // 5%
+            } elseif ($months < 12) {
+                $increaseRate = 0.08; // 8%
+            } else {
+                $increaseRate = min(0.12 + ($years * 0.03), 0.20); // max 20%
+            }
 
+            $suggestedRaw = $lastAmount + ($lastAmount * $increaseRate);
+            $suggested = round($suggestedRaw, -2);
+
+            if ($increaseRate === 0) {
             return response()->json([
-                'message' => "💡 {$timeText} ago, they gave you ₹{$lastAmount}. A fair return today would be around ₹{$suggested} — thoughtful and balanced 😊"
+                'message' => "💡 {$timeText} ago, they gave you ₹{$lastAmount}. Returning the same amount ₹{$lastAmount} would be perfectly appropriate 😊"
             ]);
+        }
+
+        return response()->json([
+            'message' => "💡 {$timeText} ago, they gave you ₹{$lastAmount}. A fair return today would be around ₹{$suggested} — thoughtful and balanced 😊"
+        ]);
         }
 
         // =====================================================

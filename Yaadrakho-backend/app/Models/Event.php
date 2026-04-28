@@ -16,4 +16,9 @@ class Event extends Model
     {
         return $this->hasMany(\App\Models\Entry::class);
     }
+
+    public function subEvents() 
+    {
+        return $this->hasMany(SubEvent::class);
+    }
 }

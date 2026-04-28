@@ -10,6 +10,7 @@ class Entry extends Model
         'event_id',
         'person_id',
         'gift_type',
+        'sub_event_id',
         'amount',
         'item_name',
         'notes'
@@ -23,5 +24,10 @@ class Entry extends Model
     public function event()
     {
         return $this->belongsTo(\App\Models\Event::class);
+    }
+
+    public function subEvent()
+    {
+        return $this->belongsTo(SubEvent::class);
     }
 }

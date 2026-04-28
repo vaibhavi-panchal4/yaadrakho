@@ -9,11 +9,10 @@ return new class extends Migration
     /**
      * Run the migrations.
      */
-    public function up()
+    public function up(): void
     {
         Schema::table('entries', function (Blueprint $table) {
-            $table->string('item_name')->nullable();
-            $table->string('gift_type')->default('cash');
+            //
         });
     }
 

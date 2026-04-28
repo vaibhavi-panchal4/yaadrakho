@@ -5,35 +5,39 @@ function ScanPage() {
   const [image, setImage] = useState(null);
   const [events, setEvents] = useState([]);
   const [eventId, setEventId] = useState("");
+  const [subEvents, setSubEvents] = useState([]);
   const [data, setData] = useState([]);
   const [mode, setMode] = useState("scan");
   const [suggestion, setSuggestion] = useState(null);
 
   // 🔥 Load events
   useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        const res = await api.get("/events");
-        setEvents(res.data);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-
-    fetchEvents();
+    api.get("/events").then((res) => setEvents(res.data));
   }, []);
 
-  // 🔥 Switch mode
-  const switchMode = (newMode) => {
-    setMode(newMode);
-    setData(
-      newMode === "manual"
-        ? [{ name: "", gift_type: "cash", amount: "", item_name: "" }]
-        : [],
-    );
+  // 🔥 Load sub-events when event changes
+  const handleEventChange = async (id) => {
+    setEventId(id);
+    setData([]);
+    setSubEvents([]);
+
+    if (!id) return;
+
+    try {
+      const res = await api.get(`/events/${id}`);
+      setSubEvents(res.data.sub_events || []);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  // 🔥 Upload image
+  // 🔄 Switch mode
+  const switchMode = (newMode) => {
+    setMode(newMode);
+    setData([]);
+  };
+
+  // 📸 Scan Upload
   const handleUpload = async () => {
     if (!eventId) return alert("Select event");
     if (!image) return alert("Select image");
@@ -45,74 +49,95 @@ function ScanPage() {
     try {
       const res = await api.post("/upload-image", formData);
 
-      const parsed = res.data.parsed_data.map((item) => ({
-        ...item,
-        gift_type: "cash",
-        item_name: "",
-      }));
+      // 🔥 group by person
+      const grouped = {};
 
-      setData(parsed);
+      res.data.parsed_data.forEach((item) => {
+        if (!grouped[item.name]) {
+          grouped[item.name] = { name: item.name, entries: [] };
+        }
+
+        grouped[item.name].entries.push({
+          sub_event_id: "",
+          gift_type: "cash",
+          amount: item.amount || "",
+          item_name: "",
+        });
+      });
+
+      setData(Object.values(grouped));
     } catch (err) {
       console.error(err);
-      alert("Upload failed");
+      alert("Scan failed");
     }
   };
 
-  // 🔥 Handle input change
-  const handleChange = async (index, field, value) => {
+  // ➕ Add person
+  const addPerson = () => {
+    setData([...data, { name: "", entries: [] }]);
+  };
+
+  // ➕ Add entry (sub-event gift)
+  const addEntry = (pIndex) => {
     const updated = [...data];
-    updated[index][field] = value;
+    updated[pIndex].entries.push({
+      sub_event_id: "",
+      gift_type: "cash",
+      amount: "",
+      item_name: "",
+    });
+    setData(updated);
+  };
 
-    // reset opposite field
-    if (field === "gift_type") {
-      if (value === "cash") {
-        updated[index].gift_item = "";
-      } else {
-        updated[index].amount = "";
-      }
-    }
+  // ❌ Remove entry
+  const removeEntry = (pIndex, eIndex) => {
+    const updated = [...data];
+    updated[pIndex].entries.splice(eIndex, 1);
+    setData(updated);
+  };
 
+  // 🤖 Smart suggestion
+  const handleNameChange = async (pIndex, value) => {
+    const updated = [...data];
+    updated[pIndex].name = value;
     setData(updated);
 
-    // 🔥 SMART SUGGESTION CALL
-    if (field === "name" && value.length > 2 && eventId) {
+    if (value.length > 2 && eventId) {
       try {
         const res = await api.get("/suggest-smart", {
-          params: {
-            name: value,
-            event_id: eventId,
-          },
+          params: { name: value, event_id: eventId },
         });
-
         setSuggestion(res.data);
-      } catch (err) {
+      } catch {
         setSuggestion(null);
       }
     }
   };
 
-  // 🔥 Add row
-  const addRow = () => {
-    setData([
-      ...data,
-      { name: "", gift_type: "cash", amount: "", item_name: "" },
-    ]);
-  };
-
-  // 🔥 Remove row
-  const removeRow = (index) => {
-    setData(data.filter((_, i) => i !== index));
-  };
-
-  // 🔥 Save entries
+  // 💾 SAVE ALL
   const handleSave = async () => {
     if (!eventId) return alert("Select event");
-    if (data.length === 0) return alert("No entries");
+
+    const flat = [];
+
+    data.forEach((p) => {
+      p.entries.forEach((e) => {
+        flat.push({
+          name: p.name,
+          sub_event_id: e.sub_event_id ? Number(e.sub_event_id) : null, // ✅ FIX
+          gift_type: e.gift_type,
+          amount: e.gift_type === "cash" ? Number(e.amount) : null,
+          item_name: e.gift_type === "gift" ? e.item_name : null,
+        });
+      });
+    });
+
+    console.log("SENDING:", flat); // 🔍 debug
 
     try {
       await api.post("/entries/save-bulk", {
         event_id: eventId,
-        entries: data,
+        entries: flat,
       });
 
       alert("Saved successfully!");
@@ -127,7 +152,7 @@ function ScanPage() {
     <div style={styles.container}>
       <h2>🎁 Add Gifts</h2>
 
-      {/* MODE SWITCH */}
+      {/* MODE */}
       <div style={styles.modeSwitch}>
         <button
           style={mode === "scan" ? styles.activeBtn : styles.modeBtn}
@@ -143,11 +168,11 @@ function ScanPage() {
         </button>
       </div>
 
-      {/* EVENT SELECT */}
+      {/* EVENT */}
       <select
         style={styles.input}
         value={eventId}
-        onChange={(e) => setEventId(e.target.value)}
+        onChange={(e) => handleEventChange(e.target.value)}
       >
         <option value="">Select Event</option>
         {events.map((e) => (
@@ -160,12 +185,7 @@ function ScanPage() {
       {/* SCAN MODE */}
       {mode === "scan" && (
         <>
-          <input
-            type="file"
-            style={styles.fileInput}
-            onChange={(e) => setImage(e.target.files[0])}
-          />
-
+          <input type="file" onChange={(e) => setImage(e.target.files[0])} />
           <button style={styles.primaryBtn} onClick={handleUpload}>
             Scan Image
           </button>
@@ -173,205 +193,127 @@ function ScanPage() {
       )}
 
       {/* MANUAL MODE */}
-      {mode === "manual" && data.length === 0 && (
-        <button style={styles.primaryBtn} onClick={addRow}>
-          ➕ Start Adding
+      {mode === "manual" && eventId && (
+        <button style={styles.addBtn} onClick={addPerson}>
+          ➕ Add Person
         </button>
       )}
 
-      {/* EDIT SECTION */}
-      {data.length > 0 && (
-        <div style={styles.card}>
-          <h3>Edit Entries</h3>
+      {/* DATA */}
+      {data.map((person, pIndex) => (
+        <div key={pIndex} style={styles.card}>
+          <input
+            placeholder="Person Name"
+            value={person.name}
+            onChange={(e) => handleNameChange(pIndex, e.target.value)}
+            style={styles.input}
+          />
 
           {suggestion && (
-            <div style={styles.suggestionBox}>
-              {suggestion.cash && (
-                <>
-                  💰 Suggested Cash: ₹ {suggestion.cash.suggested} <br />
-                  Last: ₹ {suggestion.cash.last} <br />
-                </>
-              )}
-
-              {suggestion.gift && (
-                <>
-                  🎁 Last Gift: {suggestion.gift.item} <br />
-                  👉 Suggest similar or higher value gift
-                </>
-              )}
-            </div>
+            <div style={styles.suggestionBox}>{suggestion.message}</div>
           )}
 
-          {data.map((item, index) => (
-            <div key={index} style={styles.row}>
-              {/* NAME */}
-              <input
-                placeholder="Name"
-                value={item.name}
-                onChange={(e) => handleChange(index, "name", e.target.value)}
-                style={styles.input}
-              />
+          {person.entries.map((entry, eIndex) => (
+            <div key={eIndex} style={styles.row}>
+              {/* SUB EVENT */}
+              <select
+                value={entry.sub_event_id}
+                onChange={(e) => {
+                  const updated = [...data];
+                  updated[pIndex].entries[eIndex].sub_event_id = Number(
+                    e.target.value,
+                  ); // ✅ FIX
+                  setData(updated);
+                }}
+              >
+                <option value="">Sub Event</option>
+                {subEvents.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
 
               {/* TYPE */}
               <select
-                value={item.gift_type}
-                onChange={(e) =>
-                  handleChange(index, "gift_type", e.target.value)
-                }
-                style={styles.typeSelect}
+                value={entry.gift_type}
+                onChange={(e) => {
+                  const updated = [...data];
+                  updated[pIndex].entries[eIndex].gift_type = e.target.value;
+                  setData(updated);
+                }}
               >
                 <option value="cash">Cash</option>
                 <option value="gift">Gift</option>
               </select>
 
-              {/* CONDITIONAL */}
-              {item.gift_type === "cash" ? (
+              {/* VALUE */}
+              {entry.gift_type === "cash" ? (
                 <input
+                  type="number"
                   placeholder="Amount"
-                  value={item.amount}
-                  onChange={(e) =>
-                    handleChange(index, "amount", e.target.value)
-                  }
-                  style={styles.input}
+                  value={entry.amount}
+                  onChange={(e) => {
+                    const updated = [...data];
+                    updated[pIndex].entries[eIndex].amount = Number(
+                      e.target.value,
+                    );
+                    setData(updated);
+                  }}
                 />
               ) : (
                 <input
                   placeholder="Gift Item"
-                  value={item.item_name}
-                  onChange={(e) =>
-                    handleChange(index, "item_name", e.target.value)
-                  }
-                  style={styles.input}
+                  value={entry.item_name}
+                  onChange={(e) => {
+                    const updated = [...data];
+                    updated[pIndex].entries[eIndex].item_name = e.target.value;
+                    setData(updated);
+                  }}
                 />
               )}
 
-              <button style={styles.deleteBtn} onClick={() => removeRow(index)}>
-                ❌
-              </button>
+              <button onClick={() => removeEntry(pIndex, eIndex)}>❌</button>
             </div>
           ))}
 
-          <button style={styles.addBtn} onClick={addRow}>
-            ➕ Add Row
-          </button>
-
-          <button style={styles.saveBtn} onClick={handleSave}>
-            💾 Save All
+          <button onClick={() => addEntry(pIndex)}>
+            ➕ Add Sub Event Gift
           </button>
         </div>
+      ))}
+
+      {/* SAVE */}
+      {data.length > 0 && (
+        <button style={styles.saveBtn} onClick={handleSave}>
+          💾 Save All
+        </button>
       )}
     </div>
   );
 }
 
-// 🎨 CLEAN STYLES (fixes dropdown issue)
 const styles = {
-  suggestionBox: {
-    background: "#fff8e1",
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 10,
-    fontSize: 14,
-  },
-  container: {
-    maxWidth: 420,
-    margin: "40px auto",
-    fontFamily: "Arial",
-  },
-  modeSwitch: {
-    display: "flex",
-    gap: 10,
-    marginBottom: 15,
-  },
-  modeBtn: {
-    flex: 1,
-    padding: 10,
-    background: "#eee",
-    borderRadius: 8,
-    border: "1px solid #ccc",
-    cursor: "pointer",
-  },
-  activeBtn: {
-    flex: 1,
-    padding: 10,
-    background: "#000",
-    color: "white",
-    borderRadius: 8,
-    cursor: "pointer",
-  },
-  input: {
-    width: "100%",
-    padding: 10,
-    marginBottom: 10,
-    borderRadius: 6,
-    border: "1px solid #ccc",
-  },
-  typeSelect: {
-    padding: 8,
-    borderRadius: 6,
-    border: "1px solid #ccc",
-    background: "#fff",
-    cursor: "pointer",
-  },
-  fileInput: {
-    marginTop: 10,
-    marginBottom: 10,
-  },
+  container: { maxWidth: 420, margin: "40px auto" },
+  input: { width: "100%", padding: 10, marginBottom: 10 },
+  modeSwitch: { display: "flex", gap: 10 },
+  modeBtn: { flex: 1, padding: 10, background: "#eee" },
+  activeBtn: { flex: 1, padding: 10, background: "#000", color: "#fff" },
   primaryBtn: {
     width: "100%",
     padding: 10,
-    background: "#4CAF50",
-    color: "white",
-    borderRadius: 8,
-    border: "none",
-    cursor: "pointer",
+    background: "green",
+    color: "#fff",
   },
-  card: {
-    marginTop: 15,
-    padding: 15,
-    background: "#f9f9f9",
-    borderRadius: 10,
-  },
-  row: {
-    display: "flex",
-    gap: 8,
-    marginBottom: 10,
-    alignItems: "center",
-  },
-  deleteBtn: {
-    background: "red",
-    color: "white",
-    border: "none",
+  addBtn: { width: "100%", padding: 10, background: "#2196F3", color: "#fff" },
+  saveBtn: { width: "100%", padding: 12, background: "#000", color: "#fff" },
+  card: { background: "#f9f9f9", padding: 15, marginTop: 10 },
+  row: { display: "flex", gap: 6, marginBottom: 8 },
+  suggestionBox: {
+    background: "#fff8e1",
+    padding: 8,
     borderRadius: 6,
-    padding: "5px 8px",
-    cursor: "pointer",
-  },
-  addBtn: {
-    width: "100%",
-    padding: 10,
-    background: "#2196F3",
-    color: "white",
-    borderRadius: 8,
-    border: "none",
-    cursor: "pointer",
-  },
-  saveBtn: {
-    width: "100%",
-    padding: 12,
-    marginTop: 10,
-    background: "#000",
-    color: "white",
-    borderRadius: 8,
-    border: "none",
-    cursor: "pointer",
-  },
-  backBtn: {
-    marginBottom: 15,
-    padding: "8px 12px",
-    borderRadius: 8,
-    border: "none",
-    background: "#ddd",
-    cursor: "pointer",
+    marginBottom: 8,
   },
 };
 

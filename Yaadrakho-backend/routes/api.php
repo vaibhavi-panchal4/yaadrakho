@@ -34,5 +34,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/suggest-smart', [SuggestionController::class, 'suggestSmart']);
     Route::post('/entries/save-bulk', [EntryController::class, 'saveBulk']);
     Route::get('/events-with-entries', [EventController::class, 'withEntries']);
+    Route::get('/events/{id}', [EventController::class, 'show']);
+    Route::put('/events/{id}', [EventController::class, 'update']);
+    Route::delete('/events/{id}', [EventController::class, 'destroy']);
+    Route::put('/entries/{id}', [EntryController::class, 'update']);
+    Route::delete('/entries/{id}', [EntryController::class, 'destroy']);
 
 });

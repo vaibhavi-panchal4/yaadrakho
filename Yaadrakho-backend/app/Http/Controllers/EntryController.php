@@ -10,16 +10,32 @@ class EntryController extends Controller
 {
     public function store(Request $request)
     {
-        $entry = Entry::create([
-            'event_id' => $request->event_id,
-            'person_id' => $request->person_id,
-            'gift_type' => $request->gift_type,
-            'amount' => $request->amount,
-            'item_name' => $request->item_name,
-            'notes' => $request->notes
+        $request->validate([
+            'name' => 'required|string',
+            'date' => 'required|date',
+            'sub_events' => 'array'
         ]);
 
-        return response()->json($entry);
+        $event = Entry::create([
+            'event_id' => $request->event_id,
+            'person_id' => $person->id,
+            'gift_type' => $entry['gift_type'],
+            'amount' => $entry['amount'] ?? null,
+            'item_name' => $entry['item_name'] ?? null,
+            'sub_event_id' => $entry['sub_event_id'] ?? null, // 🔥 MUST EXIST
+        ]);
+        
+        // 🔥 save sub-events if provided
+        if ($request->sub_events) {
+            foreach ($request->sub_events as $sub) {
+                SubEvent::create([
+                    'event_id' => $event->id,
+                    'name' => $sub
+                ]);
+            }
+        }
+
+        return response()->json($event);
     }
 
     public function getByEvent($eventId)
@@ -61,6 +77,7 @@ class EntryController extends Controller
             Entry::create([
                 'event_id' => $request->event_id,
                 'person_id' => $person->id,
+                'sub_event_id' => $entry['sub_event_id'] ?? null, // ✅ ADD THIS
                 'gift_type' => $giftType,
 
                 'amount' => $giftType === 'cash'
@@ -77,5 +94,26 @@ class EntryController extends Controller
             'message' => 'Entries saved successfully',
             'data' => $saved
         ]);
+    }
+
+    public function update(Request $request, $id)
+    {
+        $entry = Entry::findOrFail($id);
+
+        $entry->update([
+            'sub_event_id' => $request->sub_event_id,
+            'gift_type' => $request->gift_type,
+            'amount' => $request->gift_type === 'cash' ? $request->amount : null,
+            'item_name' => $request->gift_type === 'gift' ? $request->item_name : null,
+        ]);
+
+        return response()->json($entry);
+    }
+
+    public function destroy($id)
+    {
+        Entry::findOrFail($id)->delete();
+
+        return response()->json(['message' => 'Entry deleted']);
     }
 }

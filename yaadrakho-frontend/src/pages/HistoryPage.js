@@ -35,11 +35,29 @@ function HistoryPage() {
     return entries.filter((e) => e.gift_type === "gift").length;
   };
 
+  // 🔥 GROUP BY SUB EVENT
+  const groupBySubEvent = (entries) => {
+    const grouped = {};
+
+    entries.forEach((e) => {
+      const key = e.sub_event?.name || "Main Event";
+
+      if (!grouped[key]) {
+        grouped[key] = [];
+      }
+
+      grouped[key].push(e);
+    });
+
+    return grouped;
+  };
+
   // 🔥 highlight search text
   const highlight = (text) => {
-    if (!search) return text;
+    if (!search || !text) return text;
 
     const parts = text.split(new RegExp(`(${search})`, "gi"));
+
     return parts.map((part, i) =>
       part.toLowerCase() === search.toLowerCase() ? (
         <span key={i} style={{ background: "#ffe082" }}>
@@ -72,25 +90,42 @@ function HistoryPage() {
 
         hasResults = true;
 
+        const grouped = groupBySubEvent(filtered);
+
         return (
           <div key={event.id} style={styles.card}>
             <h3>{event.title}</h3>
             <p style={styles.date}>{event.event_date}</p>
 
-            {/* LIST */}
-            {filtered.map((entry, i) => (
-              <div key={i} style={styles.row}>
-                <span>{highlight(entry.person?.name || "")}</span>
+            {/* 🔥 GROUPED LIST */}
+            {Object.entries(grouped).map(([subEvent, entries]) => {
+              const subTotal = getCashTotal(entries);
 
-                {entry.gift_type === "cash" ? (
-                  <span style={styles.cash}>₹ {entry.amount}</span>
-                ) : (
-                  <span style={styles.gift}>
-                    🎁 {entry.item_name || "Gift"}
-                  </span>
-                )}
-              </div>
-            ))}
+              return (
+                <div key={subEvent} style={styles.subEventBlock}>
+                  {/* SUB EVENT HEADER */}
+                  <div style={styles.subEventHeader}>
+                    <span>{subEvent}</span>
+                    <span style={styles.subTotal}>₹ {subTotal}</span>
+                  </div>
+
+                  {/* ENTRIES */}
+                  {entries.map((entry, i) => (
+                    <div key={i} style={styles.row}>
+                      <span>{highlight(entry.person?.name)}</span>
+
+                      {entry.gift_type === "cash" ? (
+                        <span style={styles.cash}>₹ {entry.amount}</span>
+                      ) : (
+                        <span style={styles.gift}>
+                          🎁 {entry.item_name || "Gift"}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
 
             {/* TOTALS */}
             <div style={styles.summary}>
@@ -101,7 +136,7 @@ function HistoryPage() {
         );
       })}
 
-      {/* 🔥 NO RESULT UI */}
+      {/* NO RESULT */}
       {!hasResults && <div style={styles.noResult}>No results found 😕</div>}
     </div>
   );
@@ -133,6 +168,23 @@ const styles = {
     color: "gray",
     marginBottom: 10,
   },
+
+  // 🔥 SUB EVENT UI
+  subEventBlock: {
+    marginTop: 10,
+  },
+  subEventHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    background: "#f5f5f5",
+    padding: "6px 10px",
+    borderRadius: 6,
+    fontWeight: "bold",
+  },
+  subTotal: {
+    color: "#333",
+  },
+
   row: {
     display: "flex",
     justifyContent: "space-between",
