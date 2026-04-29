@@ -6,8 +6,8 @@ function HistoryPage() {
   const [events, setEvents] = useState([]);
   const [search, setSearch] = useState("");
 
-  //const [editingEntryId, setEditingEntryId] = useState(null);
-  //const [editingEventId, setEditingEventId] = useState(null);
+  const [editingEntryId, setEditingEntryId] = useState(null);
+  const [editingEventId, setEditingEventId] = useState(null);
 
   const [editData, setEditData] = useState({});
   const [eventEditData, setEventEditData] = useState("");
