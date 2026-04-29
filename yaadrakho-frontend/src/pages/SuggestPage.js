@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import api from "../services/api";
-import { useNavigate } from "react-router-dom";
 import { useToast } from "../components/ToastProvider";
 
 function SuggestPage() {

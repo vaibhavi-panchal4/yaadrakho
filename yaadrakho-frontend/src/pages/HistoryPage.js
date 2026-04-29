@@ -6,8 +6,8 @@ function HistoryPage() {
   const [events, setEvents] = useState([]);
   const [search, setSearch] = useState("");
 
-  const [editingEntryId, setEditingEntryId] = useState(null);
-  const [editingEventId, setEditingEventId] = useState(null);
+  //const [editingEntryId, setEditingEntryId] = useState(null);
+  //const [editingEventId, setEditingEventId] = useState(null);
 
   const [editData, setEditData] = useState({});
   const [eventEditData, setEventEditData] = useState("");
@@ -53,7 +53,7 @@ function HistoryPage() {
 
   // ENTRY EDIT
   const startEdit = (entry) => {
-    setEditingEntryId(entry.id);
+    //setEditingEntryId(entry.id);
     setEditData({
       name: entry.person?.name || "",
       amount: entry.amount || "",
@@ -62,8 +62,7 @@ function HistoryPage() {
     });
   };
 
-  {
-    /*const saveEdit = async (entry) => {
+  /*const saveEdit = async (entry) => {
     await api.put(`/entries/${entry.id}`, {
       gift_type: editData.gift_type,
       amount: editData.gift_type === "cash" ? editData.amount : null,
@@ -76,7 +75,6 @@ function HistoryPage() {
     fetchData();
     showToast("Entry updated ✨", "success");
   }; */
-  }
 
   //const cancelEdit = () => setEditingEntryId(null);
 
