@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import api from "../services/api";
 import { useNavigate } from "react-router-dom";
-import { useToast } from "../components/ToastProvider";
 import { showToast } from "../components/toast";
 
 function CreateEventPage() {

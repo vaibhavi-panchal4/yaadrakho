@@ -62,7 +62,8 @@ function HistoryPage() {
     });
   };
 
-  const saveEdit = async (entry) => {
+  {
+    /*const saveEdit = async (entry) => {
     await api.put(`/entries/${entry.id}`, {
       gift_type: editData.gift_type,
       amount: editData.gift_type === "cash" ? editData.amount : null,
@@ -74,9 +75,10 @@ function HistoryPage() {
     setEditingEntryId(null);
     fetchData();
     showToast("Entry updated ✨", "success");
-  };
+  }; */
+  }
 
-  const cancelEdit = () => setEditingEntryId(null);
+  //const cancelEdit = () => setEditingEntryId(null);
 
   const deleteEntry = (id) => {
     setDeleteId(id);
@@ -221,7 +223,7 @@ function HistoryPage() {
 
                   <div className="divide-y">
                     {entries.map((entry) => {
-                      const isEditing = editingEntryId === entry.id;
+                      //const isEditing = editingEntryId === entry.id;
 
                       return (
                         <div

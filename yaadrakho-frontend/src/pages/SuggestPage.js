@@ -11,7 +11,7 @@ function SuggestPage() {
   const [confirmData, setConfirmData] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const navigate = useNavigate();
+  //const navigate = useNavigate();
   const { showToast } = useToast();
 
   // 🔥 fetch events

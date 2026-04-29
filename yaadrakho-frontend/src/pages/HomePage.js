@@ -15,7 +15,7 @@ function HomePage() {
     showToast("Feature coming soon 🚀");
   };
 
-  const user = JSON.parse(localStorage.getItem("user"));
+  //const user = JSON.parse(localStorage.getItem("user"));
 
   return (
     <div className="min-h-screen bg-gray-100 px-4 py-6">
