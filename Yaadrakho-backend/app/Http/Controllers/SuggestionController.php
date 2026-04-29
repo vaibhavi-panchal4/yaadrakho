@@ -17,16 +17,15 @@ class SuggestionController extends Controller
             $eventId = $request->event_id;
             $personId = $request->person_id;
 
-            // ✅ VALIDATION (FIXED)
             if (!$eventId || (!$name && !$personId)) {
                 return response()->json(['error' => 'Missing data'], 400);
             }
 
-            // =====================================================
-            // ✅ CASE 1: USER SELECTED FROM SUGGESTION (person_id)
-            // =====================================================
+            // ✅ DIRECT SELECT
             if ($personId) {
-                $person = Person::find($personId);
+                $person = Person::where('id', $personId)
+                    ->where('user_id', auth()->id())
+                    ->first();
 
                 if (!$person) {
                     return response()->json([
@@ -37,13 +36,14 @@ class SuggestionController extends Controller
                 return $this->generateSuggestion($person, $eventId);
             }
 
-            // =====================================================
-            // ✅ CASE 2: USER TYPING NAME → FIND MATCHES
-            // =====================================================
+            // ✅ SEARCH
             $normalized = strtolower(str_replace(' ', '', $name));
 
-            $persons = Person::where('normalized_name', 'LIKE', "%$normalized%")
-                ->orWhere('normalized_name', 'LIKE', "$normalized%")
+            $persons = Person::where('user_id', auth()->id()) // 🔥 IMPORTANT
+                ->where(function ($q) use ($normalized) {
+                    $q->where('normalized_name', 'LIKE', "%$normalized%")
+                      ->orWhere('normalized_name', 'LIKE', "$normalized%");
+                })
                 ->get();
 
             if ($persons->isEmpty()) {
@@ -52,7 +52,7 @@ class SuggestionController extends Controller
                 ]);
             }
 
-            // 🎯 SORT BEST MATCHES
+            // 🎯 SCORE
             $scored = [];
 
             foreach ($persons as $p) {
@@ -70,15 +70,12 @@ class SuggestionController extends Controller
 
             usort($scored, fn($a, $b) => $b['score'] <=> $a['score']);
 
-            // 🔥 TAKE TOP 3
             $top = array_slice($scored, 0, 3);
 
-            // ✅ IF EXACT MATCH → DIRECT RESULT
             if ($top && $top[0]['person']->normalized_name === $normalized) {
                 return $this->generateSuggestion($top[0]['person'], $eventId);
             }
 
-            // ❗ OTHERWISE → ASK USER
             return response()->json([
                 'type' => 'confirm',
                 'options' => array_map(function ($item) {
@@ -97,103 +94,116 @@ class SuggestionController extends Controller
     }
 
     // =====================================================
-    // ✅ FINAL SUGGESTION LOGIC
+    // 🔥 NEW SMART EVENT-BASED LOGIC
     // =====================================================
     private function generateSuggestion($person, $eventId)
     {
-        $event = Event::find($eventId);
-
-        $entry = Entry::where('person_id', $person->id)
-            ->whereHas('event', function ($q) use ($event) {
-                $q->where('title', $event->title);
-            })
-            ->latest()
+        $event = Event::where('id', $eventId)
+            ->where('user_id', auth()->id())
             ->first();
 
-        if (!$entry) {
+        if (!$event) {
+            return response()->json(['message' => 'Event not found']);
+        }
+
+        $entries = Entry::with('subEvent')
+            ->where('person_id', $person->id)
+            ->whereHas('event', function ($q) use ($event) {
+                $q->where('id', $event->id)
+                ->where('user_id', auth()->id());
+            })
+            ->get();
+
+        if ($entries->isEmpty()) {
             return response()->json([
-                'message' => "No past data for this event type 🤔"
+                'message' => "No past data for this event 🤔"
             ]);
         }
 
-        
-        $date = Carbon::parse($entry->created_at);
+        // =====================================================
+        // 🔥 GROUP BY SUB EVENT
+        // =====================================================
+        $grouped = [];
 
-        $days = (int)$date->diffInDays(now());
-        $months = (int)$date->diffInMonths(now());
+        foreach ($entries as $entry) {
+            $key = $entry->subEvent->name ?? 'Main Event';
+
+            if (!isset($grouped[$key])) {
+                $grouped[$key] = [
+                    'cash' => 0,
+                    'gifts' => []
+                ];
+            }
+
+            if ($entry->gift_type === 'cash') {
+                $grouped[$key]['cash'] += $entry->amount;
+            }
+
+            if ($entry->gift_type === 'gift') {
+                $grouped[$key]['gifts'][] = $entry->item_name;
+            }
+        }
+
+        // =====================================================
+        // ⏱ TIME
+        // =====================================================
+        $date = Carbon::parse($event->event_date);
         $years = (int)$date->diffInYears(now());
 
-        // ✅ CLEAN TIME FORMAT
-        if ($days < 30) {
-            $timeText = $days . " day" . ($days == 1 ? "" : "s");
-        } elseif ($months < 12) {
-            $timeText = $months . " month" . ($months == 1 ? "" : "s");
-        } else {
-            $timeText = $years . " year" . ($years == 1 ? "" : "s");
-        }
+        $timeText = $years > 0 ? "$years years ago" : "recently";
 
         // =====================================================
-        // 💰 CASH LOGIC (SMART INCREASE)
+        // 💡 BUILD RESPONSE
         // =====================================================
-        if ($entry->gift_type === 'cash') {
+        $breakdown = [];
+        $suggestedBreakdown = [];
+        $totalCash = 0;
+        $suggestedTotal = 0;
 
-            $lastAmount = $entry->amount;
+        foreach ($grouped as $sub => $data) {
 
-            $yearsFactor = $months / 12;
+            $cash = $data['cash'];
+            $gifts = $data['gifts'];
 
-            $days = (int)$date->diffInDays(now());
-            $months = (int)$date->diffInMonths(now());
-            $years = $months / 12;
+            $totalCash += $cash;
 
-            // 🎯 Smart increase rules
-            if ($days < 30) {
-                $increaseRate = 0; // no change for recent
-            } elseif ($months < 6) {
-                $increaseRate = 0.05; // 5%
-            } elseif ($months < 12) {
-                $increaseRate = 0.08; // 8%
-            } else {
-                $increaseRate = min(0.12 + ($years * 0.03), 0.20); // max 20%
-            }
+            // 🎯 SMART INCREASE
+            $suggestedCash = $cash > 0
+                ? round($cash * 1.15, -2) // 15% increase per sub-event
+                : 0;
 
-            $suggestedRaw = $lastAmount + ($lastAmount * $increaseRate);
-            $suggested = round($suggestedRaw, -2);
+            $suggestedTotal += $suggestedCash;
 
-            if ($increaseRate === 0) {
-            return response()->json([
-                'message' => "💡 {$timeText} ago, they gave you ₹{$lastAmount}. Returning the same amount ₹{$lastAmount} would be perfectly appropriate 😊"
-            ]);
+            $breakdown[] = [
+                'sub_event' => $sub,
+                'cash' => $cash,
+                'gifts' => $gifts
+            ];
+
+            $suggestedBreakdown[] = [
+                'sub_event' => $sub,
+                'cash' => $suggestedCash,
+                'gifts' => count($gifts) > 0 ? 'similar gift' : null
+            ];
         }
 
         return response()->json([
-            'message' => "💡 {$timeText} ago, they gave you ₹{$lastAmount}. A fair return today would be around ₹{$suggested} — thoughtful and balanced 😊"
-        ]);
-        }
+            'type' => 'smart',
 
-        // =====================================================
-        // 🎁 GIFT LOGIC
-        // =====================================================
-        if ($entry->gift_type === 'gift') {
+            'summary' => [
+                'event' => $event->title,
+                'time' => $timeText,
+                'total_cash' => $totalCash,
+            ],
 
-            $item = strtolower($entry->item_name);
+            'given' => $breakdown,
 
-            $suggestion = "a similar or slightly better gift";
+            'suggested' => $suggestedBreakdown,
 
-            if (str_contains($item, 'watch')) {
-                $suggestion = "a similar watch or slightly upgraded brand";
-            } elseif (str_contains($item, 'perfume')) {
-                $suggestion = "a premium perfume or combo set";
-            } elseif (str_contains($item, 'wallet')) {
-                $suggestion = "a leather wallet or accessory set";
-            }
-
-            return response()->json([
-                'message' => "🎁 {$timeText} ago, they gave you '{$entry->item_name}'. You could return {$suggestion} — thoughtful and balanced 😉"
-            ]);
-        }
-
-        return response()->json([
-            'message' => "No suggestion available"
+            'final' => [
+                'cash' => $suggestedTotal,
+                'note' => 'Return similar gifts where applicable'
+            ]
         ]);
     }
 }

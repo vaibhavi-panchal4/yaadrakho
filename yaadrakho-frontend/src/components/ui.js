@@ -1,42 +1,34 @@
 import React from "react";
 
-export const LoaderButton = ({ loading, children, ...props }) => (
+// 🔘 BUTTON
+export const LoaderButton = ({
+  loading,
+  children,
+  className = "",
+  ...props
+}) => (
   <button
     {...props}
-    style={{
-      ...props.style,
-      opacity: loading ? 0.7 : 1,
-      cursor: loading ? "not-allowed" : "pointer",
-    }}
     disabled={loading}
+    className={`w-full p-3 rounded-xl font-semibold text-white transition 
+      ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-black hover:scale-105 active:scale-95"}
+      ${className}`}
   >
     {loading ? "⏳ Please wait..." : children}
   </button>
 );
 
-export const Card = ({ children }) => (
-  <div
-    style={{
-      background: "#fff",
-      padding: 20,
-      borderRadius: 12,
-      boxShadow: "0 4px 15px rgba(0,0,0,0.05)",
-    }}
-  >
+// 📦 CARD
+export const Card = ({ children, className = "" }) => (
+  <div className={`bg-white p-5 rounded-2xl shadow-md ${className}`}>
     {children}
   </div>
 );
 
-export const Input = (props) => (
+// ✏️ INPUT
+export const Input = ({ className = "", ...props }) => (
   <input
     {...props}
-    style={{
-      width: "100%",
-      padding: 12,
-      borderRadius: 8,
-      border: "1px solid #ddd",
-      marginBottom: 12,
-      fontSize: 14,
-    }}
+    className={`w-full p-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-black ${className}`}
   />
 );

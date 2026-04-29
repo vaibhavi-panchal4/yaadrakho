@@ -11,31 +11,37 @@ class EntryController extends Controller
     public function store(Request $request)
     {
         $request->validate([
+            'event_id' => 'required|exists:events,id',
             'name' => 'required|string',
-            'date' => 'required|date',
-            'sub_events' => 'array'
+            'gift_type' => 'required|in:cash,gift',
+            'amount' => 'nullable|numeric',
+            'item_name' => 'nullable|string',
+            'sub_event_id' => 'nullable|exists:sub_events,id'
         ]);
 
-        $event = Entry::create([
+        $name = trim($request->name);
+        $normalized = strtolower(str_replace(' ', '', $name));
+
+        $person = Person::firstOrCreate(
+            [
+                'user_id' => auth()->id(),
+                'normalized_name' => $normalized
+            ],
+            [
+                'name' => $name
+            ]
+        );
+
+        $entry = Entry::create([
             'event_id' => $request->event_id,
             'person_id' => $person->id,
-            'gift_type' => $entry['gift_type'],
-            'amount' => $entry['amount'] ?? null,
-            'item_name' => $entry['item_name'] ?? null,
-            'sub_event_id' => $entry['sub_event_id'] ?? null, // 🔥 MUST EXIST
+            'sub_event_id' => $request->sub_event_id,
+            'gift_type' => $request->gift_type,
+            'amount' => $request->gift_type === 'cash' ? $request->amount : null,
+            'item_name' => $request->gift_type === 'gift' ? $request->item_name : null,
         ]);
-        
-        // 🔥 save sub-events if provided
-        if ($request->sub_events) {
-            foreach ($request->sub_events as $sub) {
-                SubEvent::create([
-                    'event_id' => $event->id,
-                    'name' => $sub
-                ]);
-            }
-        }
 
-        return response()->json($event);
+        return response()->json($entry);
     }
 
     public function getByEvent($eventId)
@@ -100,6 +106,17 @@ class EntryController extends Controller
     {
         $entry = Entry::findOrFail($id);
 
+        // 🔥 UPDATE PERSON NAME
+        if ($request->name) {
+            $person = $entry->person;
+
+            $person->update([
+                'name' => $request->name,
+                'normalized_name' => strtolower(str_replace(' ', '', $request->name))
+            ]);
+        }
+
+        // 🔥 UPDATE ENTRY
         $entry->update([
             'sub_event_id' => $request->sub_event_id,
             'gift_type' => $request->gift_type,
@@ -107,7 +124,7 @@ class EntryController extends Controller
             'item_name' => $request->gift_type === 'gift' ? $request->item_name : null,
         ]);
 
-        return response()->json($entry);
+        return response()->json($entry->load('person'));
     }
 
     public function destroy($id)

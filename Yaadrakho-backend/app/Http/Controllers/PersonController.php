@@ -35,4 +35,22 @@ class PersonController extends Controller
             'data' => $person
         ]);
     }
+
+    public function update($id, Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string'
+        ]);
+
+        $person = Person::findOrFail($id);
+
+        $normalized = strtolower(str_replace(' ', '', $request->name));
+
+        $person->update([
+            'name' => $request->name,
+            'normalized_name' => $normalized
+        ]);
+
+        return response()->json($person);
+    }
 }

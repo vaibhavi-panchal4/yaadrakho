@@ -11,10 +11,12 @@ use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SuggestionController;
 use App\Http\Controllers\ImageController;
 
-
 // Public routes
 Route::post('/register', [RegisteredUserController::class, 'store']);
 Route::post('/login', [AuthenticatedSessionController::class, 'store']);
+Route::post('/forgot-password', [AuthenticatedSessionController::class, 'forgotPassword']);
+Route::post('/send-otp', [AuthenticatedSessionController::class, 'sendOtp']);
+Route::post('/verify-otp', [AuthenticatedSessionController::class, 'verifyOtp']);
 
 // Protected route
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
@@ -39,5 +41,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/events/{id}', [EventController::class, 'destroy']);
     Route::put('/entries/{id}', [EntryController::class, 'update']);
     Route::delete('/entries/{id}', [EntryController::class, 'destroy']);
+    Route::put('/persons/{id}', [PersonController::class, 'update']);
+    Route::get('/export/csv', [EventController::class, 'exportCsv']);
 
 });

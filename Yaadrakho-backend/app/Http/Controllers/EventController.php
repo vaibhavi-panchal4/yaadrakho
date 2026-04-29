@@ -83,4 +83,46 @@ class EventController extends Controller
 
         return response()->json(['message' => 'Event deleted']);
     }
+
+    public function exportCsv()
+    {
+        $events = \App\Models\Event::with(['entries.person', 'entries.subEvent'])
+            ->where('user_id', auth()->id())
+            ->get();
+
+        $filename = "yaadrakho_export.csv";
+
+        $handle = fopen('php://output', 'w');
+
+        // Headers
+        fputcsv($handle, [
+            'Event',
+            'Date',
+            'Person',
+            'Sub Event',
+            'Type',
+            'Amount',
+            'Gift'
+        ]);
+
+        foreach ($events as $event) {
+            foreach ($event->entries as $entry) {
+                fputcsv($handle, [
+                    $event->title,
+                    $event->event_date,
+                    $entry->person->name ?? '',
+                    $entry->subEvent->name ?? 'Main Event',
+                    $entry->gift_type,
+                    $entry->amount,
+                    $entry->item_name
+                ]);
+            }
+        }
+
+        fclose($handle);
+
+        return response()->streamDownload(function () use ($handle) {}, $filename, [
+            "Content-Type" => "text/csv",
+        ]);
+    }
 }

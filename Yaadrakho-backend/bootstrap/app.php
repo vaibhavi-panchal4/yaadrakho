@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -16,14 +17,15 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(\Illuminate\Http\Middleware\HandleCors::class);
 
         $middleware->api(prepend: [
-            //\Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+            // keep empty
         ]);
 
         $middleware->alias([
             'verified' => \App\Http\Middleware\EnsureEmailIsVerified::class,
         ]);
+
+        // ❌ REMOVE STATEFUL MIDDLEWARE
     })
-    
     ->withExceptions(function (Exceptions $exceptions): void {
         //
     })->create();

@@ -3,39 +3,109 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use App\Models\User;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\DB;
 
 class AuthenticatedSessionController extends Controller
 {
-    /**
-     * Handle an incoming authentication request.
-     */
-    public function store(LoginRequest $request)
+    public function sendOtp(Request $request)
     {
-        $request->authenticate();
+        $request->validate(['email' => 'required|email']);
 
-        //$request->session()->regenerate();
+        $user = \App\Models\User::where('email', $request->email)->first();
+
+        if (!$user) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
+
+        $otp = rand(100000, 999999);
+
+        DB::table('password_resets')->updateOrInsert(
+            ['email' => $request->email],
+            ['otp' => $otp, 'created_at' => now()]
+        );
+
+        // 🔥 send email
+        Mail::raw("Your OTP is: $otp", function ($message) use ($request) {
+            $message->to($request->email)
+                    ->subject('Password Reset OTP');
+        });
+
+        return response()->json(['message' => 'OTP sent']);
+    }
+
+    public function verifyOtp(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'otp' => 'required',
+            'password' => 'required|min:6'
+        ]);
+
+        $record = DB::table('password_resets')
+            ->where('email', $request->email)
+            ->where('otp', $request->otp)
+            ->first();
+
+        if (!$record) {
+            return response()->json(['message' => 'Invalid OTP'], 400);
+        }
+
+        \App\Models\User::where('email', $request->email)
+            ->update([
+                'password' => \Illuminate\Support\Facades\Hash::make($request->password)
+            ]);
+
+        DB::table('password_resets')->where('email', $request->email)->delete();
+
+        return response()->json(['message' => 'Password reset successful']);
+    }
+
+    public function store(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required'
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user || !Hash::check($request->password, $user->password)) {
+            return response()->json(['message' => 'Invalid credentials'], 401);
+        }
 
         return response()->json([
-            'token' => $request->user()->createToken('auth_token')->plainTextToken,
-            'user' => $request->user()
+            'token' => $user->createToken('auth_token')->plainTextToken,
+            'user' => $user
         ]);
     }
 
-    /**
-     * Destroy an authenticated session.
-     */
-    public function destroy(Request $request): Response
+    public function destroy(Request $request)
     {
-        Auth::guard('web')->logout();
+        $request->user()->tokens()->delete();
 
-        $request->session()->invalidate();
+        return response()->json(['message' => 'Logged out']);
+    }
+    public function forgotPassword(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required|min:6',
+        ]);
 
-        $request->session()->regenerateToken();
+        $user = \App\Models\User::where('email', $request->email)->first();
 
-        return response()->noContent();
+        if (!$user) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
+
+        $user->update([
+            'password' => \Illuminate\Support\Facades\Hash::make($request->password)
+        ]);
+
+        return response()->json(['message' => 'Password reset successful']);
     }
 }
