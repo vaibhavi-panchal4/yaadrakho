@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Hash;
 use App\Models\User;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\DB;
+use Resend;
 
 class AuthenticatedSessionController extends Controller
 {
@@ -30,10 +31,15 @@ class AuthenticatedSessionController extends Controller
                 ['otp' => $otp, 'created_at' => now()]
             );
 
-            \Mail::raw("Your OTP is: $otp", function ($message) use ($request) {
-                $message->to($request->email)
-                        ->subject('Password Reset OTP');
-            });
+            // 🔥 RESEND EMAIL
+            $resend = Resend::client(env('RESEND_API_KEY'));
+
+            $resend->emails->send([
+                'from' => 'onboarding@resend.dev',
+                'to' => [$request->email],
+                'subject' => 'Password Reset OTP',
+                'html' => "<strong>Your OTP is: $otp</strong>",
+            ]);
 
             return response()->json(['message' => 'OTP sent']);
 
