@@ -15,8 +15,22 @@ class AuthenticatedSessionController extends Controller
     public function sendOtp(Request $request)
     {
         try {
-            // your existing code
-            Mail::raw("Your OTP is: $otp", function ($message) use ($request) {
+            $request->validate(['email' => 'required|email']);
+
+            $user = \App\Models\User::where('email', $request->email)->first();
+
+            if (!$user) {
+                return response()->json(['message' => 'User not found'], 404);
+            }
+
+            $otp = rand(100000, 999999);
+
+            \DB::table('password_resets')->updateOrInsert(
+                ['email' => $request->email],
+                ['otp' => $otp, 'created_at' => now()]
+            );
+
+            \Mail::raw("Your OTP is: $otp", function ($message) use ($request) {
                 $message->to($request->email)
                         ->subject('Password Reset OTP');
             });
